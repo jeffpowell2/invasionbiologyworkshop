@@ -128,3 +128,78 @@ m1s <- lagsarlm(m1, data=dat, listw=lw)
 summary(m1s)
 
 
+# below an example using polynomial regression
+# we've excluded the 'INV' sites because they generate nonsensical model predictions
+m2 <- lm(log10(rich) ~ site_code * poly(prec, 2), data=dat %>% 
+           filter(site_code != 'INV'))
+Anova(m2)
+summary(m2)
+ggpredict(m2, c('prec', 'site_code')) %>% plot()
+
+# an example of how you can use ggplot with exported model predictions 
+# and the raw data to produce a figure that could be publishable
+preds <- ggpredict(m2, c('prec', 'site_code')) %>% 
+  as.data.frame()
+# output has standardised column names, need these for ggplot aesthetics
+head(preds)
+# two data sources: ggpredict output (preds) to all layers and raw data (dat) to a single layer
+ggplot(preds, aes(x=x, y=predicted, colour=group, fill=group)) + 
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high, colour=NULL), alpha=0.2) +
+  geom_line(linewidth=1.2) + 
+  geom_point(data=dat %>% # need to filter out 'INV' samples and specify aesthetics from the original dataframe
+               filter(site_code != 'INV'), 
+             mapping=aes(x=prec, y=log10(rich), colour=site_code), 
+             inherit.aes=FALSE, alpha=0.5) + 
+  labs(x='Mean annual precipitation (mm)', 
+       y='Fungal OTU richness (log10-tr.)', 
+       colour='Site type', 
+       fill='Site type') + 
+  theme_bw()
+
+
+### looking for taxa being lost/gained among the different site_codes
+
+# first read in the taxonomy table
+# also add a column with genus names without 'g__' prefix, for comparison with the next table
+tax <- read_delim('rawdata/Taxa_table_SOB.csv', delim=';') %>% 
+  mutate(genus = gsub('g__', '', Genus))
+# limit these analyses to only ectomycorrhizal taxa
+# read in dataframe containing genus names extracted from funguild
+ecm <- read_tsv('rawdata/funguild_ecm.tsv')
+
+# ggplot requires data in 'long' format, do this and some other modifications
+otul <- otu %>% 
+  pivot_longer(names_to='SampleID', values_to='count', -OTU_ID) %>% # convert from wide to long
+  filter(count > 0) %>% # filter all rows with no observations
+  left_join(tax) %>% # join taxonomic information to the count data
+  mutate(guild = case_when(genus %in% ecm$genus ~ 'ecm')) # add column identifying genera classified as EM fungal
+
+# calculate sums of counts by each level of Order and site_code
+# only using those observations of taxa classified as 'ecm'
+temp <- left_join(meta, otul %>% filter(guild == 'ecm')) %>% 
+  group_by(site_code, Order) %>%  
+  summarise(count=sum(count)) 
+
+# plot result and save as an object so that it can be inspected in two ways
+ggplot(temp, aes(x=site_code, y=count, fill=Order)) + 
+  geom_bar(stat='identity', position=position_fill()) + 
+  scale_fill_brewer(palette='Set3') -> p
+p # look at static plot
+plotly::ggplotly(p) # look at interactive plot
+
+# some further manipulation -- reclassify taxa that have low abundance overall to simplify presentation
+# first create a table of taxa that each make up at least 1% of observations
+temp %>% 
+  group_by(Order) %>% 
+  summarise(count=sum(count)) %>% 
+  mutate(prop=count/sum(count)) %>% 
+  filter(prop >= 0.01) -> keep
+# create a new column in 'temp' that either keeps the taxonomic name 
+# or, if below 1%, replaces it with 'other'
+temp %>% 
+  mutate(newOrder = case_when(Order %in% keep$Order ~ Order, 
+                              TRUE ~ 'other')) -> temp
+# plot result
+ggplot(temp, aes(x=site_code, y=count, fill=newOrder)) + 
+  geom_bar(stat='identity', position=position_fill()) + 
+  scale_fill_brewer(palette='Set3')
