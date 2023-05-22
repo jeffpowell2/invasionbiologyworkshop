@@ -20,6 +20,11 @@ tax %>%
   mutate(across(Kingdom:Species, ~gsub('^[a-z]\\_\\_', '', .)), 
          guild = case_when(Genus %in% ecm$genus ~ 'ectomycorrhizal', 
                            Genus %in% path$genus ~ 'pathogenic', 
-                           Genus %in% sap$genus ~ 'saprotrophic')) -> path
+                           Genus %in% sap$genus ~ 'saprotrophic')) -> tax
+
+# transpose community table, to sample-taxon, for vegan functions
+otu %>% 
+  column_to_rownames('OTU_ID') %>% 
+  t() -> mat
 
 

@@ -19,11 +19,8 @@ tavg <- getData('worldclim', var='tmean', res=2.5)
 
 # example of loading and merging multiple geotiffs for solar irradiation
 files <- list.files('wc2.1_2.5m_srad', full.names=TRUE)
-srad <- brick(files[1])
-for(i in 2:length(files)) {
-  temp <- brick(files[i])
-  srad <- merge(srad, temp)
-}
+do.call('stack', files[1:3])
+srad <- stack(files)
 
 ## other databases
 # aridity and PET: https://cgiarcsi.community/data/global-aridity-and-pet-database/
@@ -34,10 +31,9 @@ for(i in 2:length(files)) {
 meta$prec <- apply(extract(prec, meta[, c('long', 'lat')]), 1, sum)
 meta$tmean <- apply(extract(tavg, meta[, c('long', 'lat')]), 1, mean)
 meta$tmean <- meta$tmean/10  # because temperature stored in way to avoid decimal
-meta$srad <- extract(srad, meta[, c('long', 'lat')])
-# below doesn't work, need to fix reading multiple geotiffs for srad
-# meta$srad <- apply(extract(srad, meta[, c('long', 'lat')]), 1, max)
+meta$srad <- apply(extract(srad, meta[, c('long', 'lat')]), 1, max)
 summary(meta)
+# write_tsv(meta, 'deriveddata/meta_with_worldclim.tsv')
 
 # read in species-sample table
 otu <- read_delim('rawdata/OTU_table_SOB.csv', delim=';')
