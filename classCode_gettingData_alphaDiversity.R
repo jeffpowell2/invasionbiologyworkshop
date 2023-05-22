@@ -13,6 +13,7 @@ meta %>%
 library(raster)
 
 # can get precipition and temperature by querying worldclim within R
+# see https://www.worldclim.org/data/worldclim21.html for more info
 prec <- getData('worldclim', var='prec', res=2.5)
 tavg <- getData('worldclim', var='tmean', res=2.5)
 
@@ -23,7 +24,6 @@ for(i in 2:length(files)) {
   temp <- brick(files[i])
   srad <- merge(srad, temp)
 }
-srad <- brick('wc2.1_2.5m_srad/wc2.1_2.5m_srad_01.tif')
 
 ## other databases
 # aridity and PET: https://cgiarcsi.community/data/global-aridity-and-pet-database/
