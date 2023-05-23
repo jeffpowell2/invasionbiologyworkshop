@@ -178,43 +178,60 @@ cbind(dat_ecm, scrs_site) %>%
   geom_point()
 
 
-xy <- dist(dat_ecm[, c('long', 'lat')])
-xy.pcnm <- pcnm(xy)$vectors %>% as.data.frame()
-names(xy.pcnm)
-str(xy.pcnm$vectors)
+# including spatial patterns in analyses of community composition
+# one way to do this is using principle coordinates of neighbour matrices
+xy <- dist(dat_ecm[, c('long', 'lat')]) # create distance matrix of longs and lats
+xy.pcnm <- pcnm(xy)$vectors %>% as.data.frame() # export the result into a dataframe
 
+# combine the PCNM results with the rest of the data  
 temp <- cbind(dat_ecm, xy.pcnm)
-ggplot(temp, aes(x=long, y=lat, colour=PCNM13)) + 
+
+# what do the PCNMs represent? A plotting example
+ggplot(temp, aes(x=long, y=lat, colour=PCNM1)) + 
   geom_point()
 
-cap.sp <- capscale(mat_ecm ~ ., data=xy.pcnm)
+# what variation is explained by these spatial variables
+cap.sp <- capscale(mat_ecm ~ ., data=temp %>% 
+                     select('long', 'lat', starts_with('PCNM')))
 cap.sp
+# proportion of variation associated with each axis
 cap.sp$CCA$eig/cap.sp$tot.chi
+# explanatory value
 anova(cap.sp)
-cap.0 <- capscale(mat_ecm ~ 1, data=xy.pcnm)
-ordistep(cap.0, formula(cap.sp), direction='forward')
+
+# which individual spatial variables to include?
+cap.0 <- capscale(mat_ecm ~ 1, data=xy.pcnm) # intercept-only, starting analysis
+# uncomment this next line to run - takes a long time
+# ordistep(cap.0, formula(cap.sp), direction='forward')
 
 
-
+# should we include all climate variables in our analysis
+# check for variance inflation - values higher than ~ 10 are unlikely to explain unique variation
 cap.cl <- capscale(mat_ecm ~ tmean + prec + srad, data=dat_ecm)
 vif.cca(cap.cl)
-plot(cap.cl)
 
-
-vp <- varpart(vegdist(mat_ecm, distance='robust.aitchison'), ~site_code, ~tmean + prec + srad, 
-        ~ PCNM1 + PCNM2 + PCNM3 + PCNM10 + PCNM12 + PCNM9 + PCNM13 + PCNM4, data=temp)
+# variation partitioning - here to three groups of variables
+vp <- varpart(vegdist(mat_ecm, distance='robust.aitchison'), 
+              ~site_code, # type of environment sample was collected from = X1
+              ~tmean + prec + srad, # climate = X2
+              ~ long + lat + PCNM1 + PCNM2 + PCNM3 + PCNM10 + PCNM12 + # spatial = X3
+                PCNM9 + PCNM13 + PCNM4, data=temp)
 vp
-plot(vp)
-anova(capscale(mat_ecm ~ PCNM1 + PCNM2 + PCNM3 + PCNM10 + PCNM12 + PCNM9 + PCNM13 + PCNM4 +
-          Condition(tmean + srad + prec + site_code), data=temp, 
-         distance='robust.aitchison'))
+plot(vp, Xnames=c('Site code', 'Climate', 'Space'))
+
+# test unique variation explained by partitions using partial CAPs
+# 1 - associated with site_code
 anova(capscale(mat_ecm ~ site_code +
                  Condition(tmean + srad + prec + 
-                             PCNM1 + PCNM2 + PCNM3 + PCNM10 + PCNM12 + PCNM9 + PCNM13 + PCNM4), data=temp, 
+                             long + lat+ PCNM1 + PCNM2 + PCNM3 + PCNM10 + PCNM12 + PCNM9 + PCNM13 + PCNM4), data=temp, 
                distance='robust.aitchison'))
+# 2 - associated with climate
 anova(capscale(mat_ecm ~ tmean + srad + prec +
                  Condition(site_code + 
-                             PCNM1 + PCNM2 + PCNM3 + PCNM10 + PCNM12 + PCNM9 + PCNM13 + PCNM4), data=temp, 
+                             long + lat + PCNM1 + PCNM2 + PCNM3 + PCNM10 + PCNM12 + PCNM9 + PCNM13 + PCNM4), data=temp, 
+               distance='robust.aitchison'))
+# 3 - associated with space
+anova(capscale(mat_ecm ~ long + lat + PCNM1 + PCNM2 + PCNM3 + PCNM10 + PCNM12 + PCNM9 + PCNM13 + PCNM4 +
+                 Condition(tmean + srad + prec + site_code), data=temp, 
                distance='robust.aitchison'))
 
-summary(meta)
